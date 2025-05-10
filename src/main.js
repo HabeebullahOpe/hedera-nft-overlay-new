@@ -11,11 +11,11 @@ document.addEventListener('DOMContentLoaded', () => {
   async function initializeWalletConnect() {
     console.log('Starting WalletConnect initialization');
     try {
-      const projectId = '02e1bc316278f55430a587c11db76048';
+      const projectId = '19f08313224ac846097e6a722ab078fc';
       const metadata = {
         name: 'Overlayz',
         description: 'NFT Overlay Tool for Hedera',
-        url: 'https://hedera-nft-overlay-new.vercel.app/',
+        url: 'https://hederanftoverlayz.vercel.app',
         icons: ['/assets/icon/Overlayz_App_Icon.png'],
       };
 
