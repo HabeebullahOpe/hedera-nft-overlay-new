@@ -11,9 +11,9 @@
 }
 
 @font-face {
-  font-family: 'Lethal Slime';
+  font-family: "Lethal Slime";
   /* Name the font */
-  src: url('/public/assets/fonts/Lethal Slime.ttf') format('truetype');
+  src: url("/public/assets/fonts/Lethal Slime.ttf") format("truetype");
   /* Path to the font file */
   font-weight: normal;
   font-style: normal;
@@ -42,7 +42,8 @@ body {
   padding: 0;
   height: 100vh;
   width: 100vw;
-  background: url("/public/assets/Overlayz_App_Icon.png") no-repeat center center;
+  background: url("/public/assets/Overlayz_App_Icon.png") no-repeat center
+    center;
   background-size: cover;
   font-family: Arial, sans-serif;
 }
@@ -53,10 +54,7 @@ body {
   overflow: auto;
   width: 100%;
   height: 100%;
-  background-color: rgba(0,
-      0,
-      0,
-      0.8);
+  background-color: rgba(0, 0, 0, 0.8);
   /* Semi-transparent overlay to darken content */
 }
 
@@ -122,7 +120,7 @@ main {
 }
 
 main .wallet-section h2 {
-  font-family: 'Lethal Slime', sans-serif;
+  font-family: "Lethal Slime", sans-serif;
   font-size: 2.5rem;
   margin-bottom: 20px;
   background: linear-gradient(90deg, #00ff40, #008020);
@@ -207,7 +205,7 @@ main #wallet-status {
 
 .nft-section h2,
 .overlay-section h2 {
-  font-family: 'Lethal Slime', sans-serif;
+  font-family: "Lethal Slime", sans-serif;
   font-size: 3rem;
   background: linear-gradient(90deg, #00ff40, #008020);
   -webkit-background-clip: text;
@@ -412,7 +410,6 @@ main #wallet-status {
   margin-top: 10px;
 }
 
-
 .footer-content {
   display: flex;
   flex-direction: column;
@@ -427,32 +424,18 @@ main #wallet-status {
   justify-content: center;
 }
 
-.footer .creator .credit-head {
+.credit-head {
   font-size: 25px;
   font-weight: bold;
+  text-align: center;
   color: #00ff40;
-}
-
-.footer .creator div {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  justify-content: center;
-  padding: 20px;
-  border-radius: 10px;
-  margin-top: 20px;
-  background-color: #000000BD;
-}
-
-.footer .creator h3 {
-  color: #FFFFFF;
 }
 
 .footer .credit {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 15px;
+  gap: 10px;
 }
 
 .footer .credit .credit-card {
@@ -460,12 +443,13 @@ main #wallet-status {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px;
+  padding: 5px;
 }
 
 .footer .credit .credit-card a {
   text-decoration: none;
-  color: #FFFFFF;
+  font-size: 18px;
+  color: #ffffff;
 }
 
 .footer .slime-tag {
@@ -475,18 +459,13 @@ main #wallet-status {
   justify-content: center;
   gap: 10px;
 }
-
-.footer .slime-tag img {
-  width: 200px;
-}
-
 .footer .slime-tag .slime-social {
   display: flex;
   gap: 20px;
 }
 
 .footer .slime-tag .slime-social img {
-  width: 30px;
+  width: 20px;
 }
 
 .footer .copyright {
@@ -495,55 +474,52 @@ main #wallet-status {
   padding: 10px;
 }
 
-
-
 /* Responsive styles */
 @media (max-width: 768px) {
   main {
     padding: 20px 10px;
   }
-  
+
   .wallet-section h2,
   .nft-section h2,
   .overlay-section h2 {
     font-size: 2rem;
   }
-  
+
   .nft-list {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
-  
+
   .nft-display {
     max-width: 300px;
     height: 300px;
   }
-  
 }
 
 @media (max-width: 480px) {
   ::-webkit-scrollbar {
     display: none;
   }
-  
+
   .header {
     padding: 10px;
   }
-  
+
   .wallet-section h2,
   .nft-section h2,
   .overlay-section h2 {
     font-size: 1.5rem;
   }
-  
+
   .nft-list {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   }
-  
+
   .nft-display {
     max-width: 250px;
     height: 250px;
   }
-  
+
   .accessory-buttons {
     justify-content: left;
     flex-wrap: nowrap;
