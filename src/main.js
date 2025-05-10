@@ -312,8 +312,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Rest of your existing functions (handleNewSession, disconnectWallet, fetchNFTs, selectNFT)
-  // ... [Keep all these functions exactly as they are in your original code]
   // Handle new session
   function handleNewSession(session) {
     console.log('Handling new session');
