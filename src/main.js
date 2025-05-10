@@ -8,6 +8,8 @@ let overlayLayer;
 let overlayImage;
 let selectedNFTImage = null;
 let selectedNFT = null;
+let nftImgInstance = null;
+let transformer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize Konva Stage
@@ -31,218 +33,96 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('resize', () => {
       stage.width(container.clientWidth);
       stage.height(container.clientHeight);
+      if (nftImgInstance) {
+        fitNFTToCanvas();
+      }
       stage.batchDraw();
     });
 
-    // Hide placeholder when canvas is initialized
     if (placeholder) placeholder.style.display = 'none';
   }
 
-  // Initialize WalletConnect
-  async function initializeWalletConnect() {
-    console.log('Starting WalletConnect initialization');
-    try {
-      const projectId = '02e1bc316278f55430a587c11db76048';
-      const metadata = {
-        name: 'Overlayz',
-        description: 'NFT Overlay Tool for Hedera',
-        url: 'https://hedera-nft-overlay-new.vercel.app/',
-        icons: ['/assets/icon/Overlayz_App_Icon.png'],
-      };
+  // Fit NFT to canvas with proper scaling
+  function fitNFTToCanvas() {
+    if (!nftImgInstance || !selectedNFTImage) return;
+
+    const container = document.getElementById('nft-display');
+    const img = new Image();
+    img.src = selectedNFTImage;
+    
+    img.onload = () => {
+      const containerRatio = container.clientWidth / container.clientHeight;
+      const imageRatio = img.width / img.height;
       
-      console.log('Creating DAppConnector instance');
-      dAppConnector = new DAppConnector(
-        metadata,
-        LedgerId.MAINNET,
-        projectId,
-        ['hedera_getAccountBalance', 'hedera_sign', 'hedera_signTransaction'],
-        ['chainChanged', 'accountsChanged'],
-        ['hedera:mainnet']
-      );
+      let newWidth, newHeight;
       
-      console.log('Initializing DAppConnector');
-      await dAppConnector.init({ logger: 'error' });
-      console.log('WalletConnect initialized successfully');
-      
-      // Connect on button click
-      console.log('Setting up connect-wallet button listener');
-      const connectButton = document.getElementById('connect-wallet');
-      if (connectButton) {
-        console.log('connect-wallet button found');
-        connectButton.addEventListener('click', async () => {
-          console.log('Connect button clicked');
-          try {
-            const session = await dAppConnector.openModal();
-            console.log('Session established:', session);
-            handleNewSession(session);
-          } catch (error) {
-            console.error('Connection error:', error);
-            const walletStatus = document.getElementById('wallet-status');
-            if (walletStatus) walletStatus.textContent = 'Connection failed';
-          }
-        });
+      if (imageRatio > containerRatio) {
+        newWidth = container.clientWidth;
+        newHeight = container.clientWidth / imageRatio;
+      } else {
+        newHeight = container.clientHeight;
+        newWidth = container.clientHeight * imageRatio;
       }
       
-      // Disconnect
-      console.log('Setting up disconnect-wallet button listener');
-      const disconnectButton = document.getElementById('disconnect-wallet');
-      if (disconnectButton) {
-        disconnectButton.addEventListener('click', disconnectWallet);
+      nftImgInstance.width(newWidth);
+      nftImgInstance.height(newHeight);
+      nftImgInstance.x((container.clientWidth - newWidth) / 2);
+      nftImgInstance.y((container.clientHeight - newHeight) / 2);
+      
+      if (overlayImage) {
+        positionOverlay();
       }
       
-    } catch (error) {
-      console.error('Wallet init error:', error);
-    }
+      stage.batchDraw();
+    };
   }
 
-  // Handle new session
-  function handleNewSession(session) {
-    console.log('Handling new session');
-    const account = session.namespaces?.hedera?.accounts?.[0];
-    if (!account) {
-      console.error('No account found');
-      return;
+  // Position overlay relative to NFT
+  function positionOverlay() {
+    if (!overlayImage || !nftImgInstance) return;
+    
+    overlayImage.position({
+      x: nftImgInstance.x(),
+      y: nftImgInstance.y()
+    });
+    
+    overlayImage.width(nftImgInstance.width());
+    overlayImage.height(nftImgInstance.height());
+    
+    if (transformer) {
+      transformer.forceUpdate();
     }
     
-    const accountId = account.split(':').pop();
-    localStorage.setItem('hederaAccountId', accountId);
-    const walletStatus = document.getElementById('wallet-status');
-    if (walletStatus) {
-      walletStatus.textContent = `Connected: ${accountId}`;
-    } else {
-      console.error('wallet-status element not found');
-    }
-    const connectButton = document.getElementById('connect-wallet');
-    const disconnectButton = document.getElementById('disconnect-wallet');
-    if (connectButton) connectButton.style.display = 'none';
-    if (disconnectButton) disconnectButton.style.display = 'block';
-    
-    fetchNFTs(accountId);
-  }
-  
-  // Disconnect
-  async function disconnectWallet() {
-    console.log('Disconnecting wallet');
-    try {
-      if (dAppConnector) {
-        await dAppConnector.disconnect();
-        dAppConnector = null;
-        const walletStatus = document.getElementById('wallet-status');
-        if (walletStatus) walletStatus.textContent = 'Wallet not connected';
-        const connectButton = document.getElementById('connect-wallet');
-        const disconnectButton = document.getElementById('disconnect-wallet');
-        if (connectButton) connectButton.style.display = 'block';
-        if (disconnectButton) disconnectButton.style.display = 'none';
-        const nftList = document.getElementById('nft-list');
-        if (nftList) nftList.innerHTML = '<p class="nft-placeholder">Connect wallet to see NFTs</p>';
-      }
-    } catch (error) {
-      console.error('Disconnect error:', error);
-    }
-  }
-  
-  // Fetch NFTs using Mirror Node REST API
-  async function fetchNFTs(accountId) {
-    console.log('Fetching NFTs for account:', accountId);
-    try {
-      const response = await fetch(`https://mainnet.mirrornode.hedera.com/api/v1/accounts/${accountId}/nfts`);
-      const data = await response.json();
-      const nfts = data.nfts || [];
-      const nftList = document.getElementById('nft-list');
-      if (nftList) {
-        nftList.innerHTML = await Promise.all(nfts.map(async nft => {
-          let imageUrl = 'https://via.placeholder.com/150';
-          if (nft.metadata) {
-            // Decode the base64 metadata
-            const metadataStr = atob(nft.metadata);
-            console.log(`Decoded metadata for NFT ${nft.serial_number}:`, metadataStr);
-            // Check if metadataStr is an IPFS URL
-            if (metadataStr.startsWith('ipfs://')) {
-              const ipfsHash = metadataStr.replace('ipfs://', '');
-              const metadataUrl = `https://ipfs.io/ipfs/${ipfsHash}`;
-              console.log(`Fetching metadata from: ${metadataUrl}`);
-              try {
-                // Fetch the metadata JSON from the IPFS URL
-                const metadataResponse = await fetch(metadataUrl);
-                const metadata = await metadataResponse.json();
-                console.log(`Metadata for NFT ${nft.serial_number}:`, metadata);
-                if (metadata.image) {
-                  // Handle the image URL from the metadata
-                  if (metadata.image.startsWith('ipfs://')) {
-                    const imageHash = metadata.image.replace('ipfs://', '');
-                    imageUrl = `https://ipfs.io/ipfs/${imageHash}`;
-                  } else {
-                    imageUrl = metadata.image;
-                  }
-                  console.log(`Final image URL for NFT ${nft.serial_number}:`, imageUrl);
-                }
-              } catch (e) {
-                console.error(`Error fetching metadata from IPFS for NFT ${nft.serial_number}:`, e);
-              }
-            } else {
-              // If metadataStr isn't an IPFS URL, try parsing it as JSON
-              try {
-                const metadata = JSON.parse(metadataStr);
-                console.log(`Metadata for NFT ${nft.serial_number}:`, metadata);
-                if (metadata.image) {
-                  if (metadata.image.startsWith('ipfs://')) {
-                    const imageHash = metadata.image.replace('ipfs://', '');
-                    imageUrl = `https://ipfs.io/ipfs/${imageHash}`;
-                  } else {
-                    imageUrl = metadata.image;
-                  }
-                  console.log(`Final image URL for NFT ${nft.serial_number}:`, imageUrl);
-                }
-              } catch (e) {
-                console.error(`Metadata parse error for NFT ${nft.serial_number}:`, e);
-              }
-            }
-          }
-          return `
-            <div class="nft-item" data-serial="${nft.serial_number}">
-              <img src="${imageUrl}" alt="NFT" onclick="selectNFT(this)">
-              <p>Serial: ${nft.serial_number}</p>
-            </div>
-          `;
-        })).then(results => results.join(''));
-      }
-    } catch (error) {
-      console.error('NFT fetch error:', error);
-      const nftList = document.getElementById('nft-list');
-      if (nftList) nftList.innerHTML = '<p class="nft-placeholder">Error fetching NFTs</p>';
-    }
+    stage.batchDraw();
   }
 
-  // Select NFT for overlay
+  // Select NFT with proper scaling
   window.selectNFT = function(img) {
     selectedNFT = img.src;
-    selectedNFTImage = img;
-    const container = document.getElementById('nft-display');
-    const placeholder = container.querySelector('.canvas-placeholder');
+    selectedNFTImage = img.src;
+    const placeholder = document.querySelector('.canvas-placeholder');
     if (placeholder) placeholder.style.display = 'none';
 
-    // Clear previous NFT image
     nftLayer.destroyChildren();
 
-    // Load new NFT image
     const imageObj = new Image();
     imageObj.crossOrigin = 'Anonymous';
     imageObj.onload = function() {
-      // Set stage size to match NFT image
-      stage.width(imageObj.width);
-      stage.height(imageObj.height);
-      
-      const nftImg = new Konva.Image({
+      nftImgInstance = new Konva.Image({
         image: imageObj,
         width: imageObj.width,
         height: imageObj.height
       });
       
-      nftLayer.add(nftImg);
+      nftLayer.add(nftImgInstance);
+      fitNFTToCanvas();
       stage.batchDraw();
     };
     imageObj.src = img.src;
-    document.querySelectorAll('.nft-item').forEach(item => item.classList.remove('selected'));
+    
+    document.querySelectorAll('.nft-item').forEach(item => {
+      item.classList.remove('selected');
+    });
     img.parentElement.classList.add('selected');
   };
 
@@ -283,9 +163,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Load overlay image with transform controls
+  // Load overlay with proper scaling
   function loadOverlayImage(src) {
-    // Remove previous overlay if exists
+    if (!nftImgInstance) {
+      alert('Please select an NFT first');
+      return;
+    }
+
     if (overlayImage) {
       overlayImage.destroy();
       overlayLayer.destroyChildren();
@@ -296,59 +180,95 @@ document.addEventListener('DOMContentLoaded', () => {
     img.onload = function() {
       overlayImage = new Konva.Image({
         image: img,
-        width: img.width,
-        height: img.height,
-        draggable: true,
-        x: stage.width() / 2 - img.width / 2,
-        y: stage.height() / 2 - img.height / 2
+        width: nftImgInstance.width(),
+        height: nftImgInstance.height(),
+        x: nftImgInstance.x(),
+        y: nftImgInstance.y(),
+        draggable: true
       });
 
-      // Add transformer for resize/rotate
-      const tr = new Konva.Transformer({
+      transformer = new Konva.Transformer({
         node: overlayImage,
         enabledAnchors: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
         rotateEnabled: true,
-        boundBoxFunc: function(oldBox, newBox) {
-          // Limit minimum size
-          if (newBox.width < 30 || newBox.height < 30) {
-            return oldBox;
-          }
-          return newBox;
+        boundBoxFunc: (oldBox, newBox) => {
+          return newBox.width < 30 || newBox.height < 30 ? oldBox : newBox;
         }
       });
 
       overlayLayer.add(overlayImage);
-      overlayLayer.add(tr);
+      overlayLayer.add(transformer);
       stage.batchDraw();
     };
     img.src = src;
   }
 
-  // Apply overlay (download)
-  document.getElementById('apply-overlay').addEventListener('click', () => {
+  // High-quality image export
+  document.getElementById('apply-overlay').addEventListener('click', async () => {
     if (!selectedNFT) {
       alert('Select an NFT first!');
       return;
     }
 
-    // Create temporary stage for export
-    const exportStage = new Konva.Stage({
-      width: stage.width(),
-      height: stage.height()
+    // Create a new stage with original image dimensions for crisp export
+    const img = new Image();
+    img.src = selectedNFT;
+    
+    await new Promise((resolve) => {
+      img.onload = resolve;
     });
 
-    // Clone layers
-    const exportNftLayer = nftLayer.clone();
-    const exportOverlayLayer = overlayLayer.clone();
-    
+    const exportStage = new Konva.Stage({
+      width: img.naturalWidth,
+      height: img.naturalHeight
+    });
+
+    // Create layers for export
+    const exportNftLayer = new Konva.Layer();
+    const exportOverlayLayer = new Konva.Layer();
+
+    // Add NFT image at original size
+    const exportNftImage = new Konva.Image({
+      image: img,
+      width: img.naturalWidth,
+      height: img.naturalHeight
+    });
+    exportNftLayer.add(exportNftImage);
+
+    // Calculate overlay scale factor
+    const scaleX = img.naturalWidth / nftImgInstance.width();
+    const scaleY = img.naturalHeight / nftImgInstance.height();
+
+    // Add overlay with proper scaling
+    if (overlayImage) {
+      const overlayImg = new Image();
+      overlayImg.src = overlayImage.image().src;
+      
+      await new Promise((resolve) => {
+        overlayImg.onload = resolve;
+      });
+
+      const exportOverlayImage = new Konva.Image({
+        image: overlayImg,
+        x: (overlayImage.x() - nftImgInstance.x()) * scaleX,
+        y: (overlayImage.y() - nftImgInstance.y()) * scaleY,
+        width: overlayImage.width() * scaleX,
+        height: overlayImage.height() * scaleY,
+        rotation: overlayImage.rotation(),
+        scaleX: overlayImage.scaleX(),
+        scaleY: overlayImage.scaleY()
+      });
+      exportOverlayLayer.add(exportOverlayImage);
+    }
+
     exportStage.add(exportNftLayer);
     exportStage.add(exportOverlayLayer);
 
-    // Export as image
+    // Export as high-quality PNG
     const dataURL = exportStage.toDataURL({
       mimeType: 'image/png',
       quality: 1,
-      pixelRatio: 2 // Higher quality
+      pixelRatio: 1 // Maintain original resolution
     });
 
     // Download
@@ -359,9 +279,163 @@ document.addEventListener('DOMContentLoaded', () => {
     link.click();
     document.body.removeChild(link);
 
-    // Clean up
     exportStage.destroy();
   });
+
+  // Wallet Connect Implementation (unchanged)
+  async function initializeWalletConnect() {
+    console.log('Starting WalletConnect initialization');
+    try {
+      const projectId = '02e1bc316278f55430a587c11db76048';
+      const metadata = {
+        name: 'Overlayz',
+        description: 'NFT Overlay Tool for Hedera',
+        url: 'https://hedera-nft-overlay-new.vercel.app/',
+        icons: ['/assets/icon/Overlayz_App_Icon.png'],
+      };
+      
+      dAppConnector = new DAppConnector(
+        metadata,
+        LedgerId.MAINNET,
+        projectId,
+        ['hedera_getAccountBalance', 'hedera_sign', 'hedera_signTransaction'],
+        ['chainChanged', 'accountsChanged'],
+        ['hedera:mainnet']
+      );
+      
+      await dAppConnector.init({ logger: 'error' });
+      
+      const connectButton = document.getElementById('connect-wallet');
+      if (connectButton) {
+        connectButton.addEventListener('click', async () => {
+          try {
+            const session = await dAppConnector.openModal();
+            handleNewSession(session);
+          } catch (error) {
+            console.error('Connection error:', error);
+            const walletStatus = document.getElementById('wallet-status');
+            if (walletStatus) walletStatus.textContent = 'Connection failed';
+          }
+        });
+      }
+      
+      const disconnectButton = document.getElementById('disconnect-wallet');
+      if (disconnectButton) {
+        disconnectButton.addEventListener('click', disconnectWallet);
+      }
+      
+    } catch (error) {
+      console.error('Wallet init error:', error);
+    }
+  }
+
+  function handleNewSession(session) {
+    console.log('Handling new session');
+    const account = session.namespaces?.hedera?.accounts?.[0];
+    if (!account) {
+      console.error('No account found');
+      return;
+    }
+    
+    const accountId = account.split(':').pop();
+    localStorage.setItem('hederaAccountId', accountId);
+    const walletStatus = document.getElementById('wallet-status');
+    if (walletStatus) {
+      walletStatus.textContent = `Connected: ${accountId}`;
+    }
+    const connectButton = document.getElementById('connect-wallet');
+    const disconnectButton = document.getElementById('disconnect-wallet');
+    if (connectButton) connectButton.style.display = 'none';
+    if (disconnectButton) disconnectButton.style.display = 'block';
+    
+    fetchNFTs(accountId);
+  }
+  
+  async function disconnectWallet() {
+    console.log('Disconnecting wallet');
+    try {
+      if (dAppConnector) {
+        await dAppConnector.disconnect();
+        dAppConnector = null;
+        const walletStatus = document.getElementById('wallet-status');
+        if (walletStatus) walletStatus.textContent = 'Wallet not connected';
+        const connectButton = document.getElementById('connect-wallet');
+        const disconnectButton = document.getElementById('disconnect-wallet');
+        if (connectButton) connectButton.style.display = 'block';
+        if (disconnectButton) disconnectButton.style.display = 'none';
+        const nftList = document.getElementById('nft-list');
+        if (nftList) nftList.innerHTML = '<p class="nft-placeholder">Connect wallet to see NFTs</p>';
+      }
+    } catch (error) {
+      console.error('Disconnect error:', error);
+    }
+  }
+  
+  async function fetchNFTs(accountId) {
+    console.log('Fetching NFTs for account:', accountId);
+    try {
+      const response = await fetch(`https://mainnet.mirrornode.hedera.com/api/v1/accounts/${accountId}/nfts`);
+      const data = await response.json();
+      const nfts = data.nfts || [];
+      const nftList = document.getElementById('nft-list');
+      if (nftList) {
+        nftList.innerHTML = await Promise.all(nfts.map(async nft => {
+          let imageUrl = 'https://via.placeholder.com/150';
+          if (nft.metadata) {
+            const metadataStr = atob(nft.metadata);
+            console.log(`Decoded metadata for NFT ${nft.serial_number}:`, metadataStr);
+            if (metadataStr.startsWith('ipfs://')) {
+              const ipfsHash = metadataStr.replace('ipfs://', '');
+              const metadataUrl = `https://ipfs.io/ipfs/${ipfsHash}`;
+              console.log(`Fetching metadata from: ${metadataUrl}`);
+              try {
+                const metadataResponse = await fetch(metadataUrl);
+                const metadata = await metadataResponse.json();
+                console.log(`Metadata for NFT ${nft.serial_number}:`, metadata);
+                if (metadata.image) {
+                  if (metadata.image.startsWith('ipfs://')) {
+                    const imageHash = metadata.image.replace('ipfs://', '');
+                    imageUrl = `https://ipfs.io/ipfs/${imageHash}`;
+                  } else {
+                    imageUrl = metadata.image;
+                  }
+                  console.log(`Final image URL for NFT ${nft.serial_number}:`, imageUrl);
+                }
+              } catch (e) {
+                console.error(`Error fetching metadata from IPFS for NFT ${nft.serial_number}:`, e);
+              }
+            } else {
+              try {
+                const metadata = JSON.parse(metadataStr);
+                console.log(`Metadata for NFT ${nft.serial_number}:`, metadata);
+                if (metadata.image) {
+                  if (metadata.image.startsWith('ipfs://')) {
+                    const imageHash = metadata.image.replace('ipfs://', '');
+                    imageUrl = `https://ipfs.io/ipfs/${imageHash}`;
+                  } else {
+                    imageUrl = metadata.image;
+                  }
+                  console.log(`Final image URL for NFT ${nft.serial_number}:`, imageUrl);
+                }
+              } catch (e) {
+                console.error(`Metadata parse error for NFT ${nft.serial_number}:`, e);
+              }
+            }
+          }
+          return `
+            <div class="nft-item" data-serial="${nft.serial_number}">
+              <img src="${imageUrl}" alt="NFT" onclick="selectNFT(this)">
+              <p>Serial: ${nft.serial_number}</p>
+            </div>
+          `;
+        })).then(results => results.join(''));
+      }
+    } catch (error) {
+      console.error('NFT fetch error:', error);
+      const nftList = document.getElementById('nft-list');
+      if (nftList) nftList.innerHTML = '<p class="nft-placeholder">Error fetching NFTs</p>';
+    }
+  }
 
   // Initialize everything
   initKonva();
