@@ -6,19 +6,19 @@ let dAppConnector;
 // Wait for DOM to load
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM fully loaded');
-
+  
   // Initialize WalletConnect
   async function initializeWalletConnect() {
     console.log('Starting WalletConnect initialization');
     try {
-      const projectId = '19f08313224ac846097e6a722ab078fc';
+      const projectId = '02e1bc316278f55430a587c11db76048';
       const metadata = {
         name: 'Overlayz',
         description: 'NFT Overlay Tool for Hedera',
-        url: 'https://hederanftoverlayz.vercel.app',
+        url: 'https://hedera-nft-overlay-new.vercel.app/',
         icons: ['/assets/icon/Overlayz_App_Icon.png'],
       };
-
+      
       console.log('Creating DAppConnector instance');
       dAppConnector = new DAppConnector(
         metadata,
@@ -28,11 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
         ['chainChanged', 'accountsChanged'],
         ['hedera:mainnet']
       );
-
+      
       console.log('Initializing DAppConnector');
       await dAppConnector.init({ logger: 'error' });
       console.log('WalletConnect initialized successfully');
-
+      
       // Connect on button click
       console.log('Setting up connect-wallet button listener');
       const connectButton = document.getElementById('connect-wallet');
@@ -51,14 +51,14 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       }
-
+      
       // Disconnect
       console.log('Setting up disconnect-wallet button listener');
       const disconnectButton = document.getElementById('disconnect-wallet');
       if (disconnectButton) {
         disconnectButton.addEventListener('click', disconnectWallet);
       }
-
+      
       // Overlay upload
       console.log('Setting up overlay-upload listener');
       const overlayUpload = document.getElementById('overlay-upload');
@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       }
-
+      
       // Preset overlays
       console.log('Setting up overlay buttons');
       ['overlay1', 'overlay2', 'overlay3', 'overlay4', 'overlay5', 'overlay6', 'overlay7'].forEach((id, index) => {
@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         }
       });
-
+      
       // Canvas setup with enhanced touch controls
       console.log('Setting up canvas listeners');
       const canvas = document.getElementById('nft-canvas');
@@ -106,48 +106,51 @@ document.addEventListener('DOMContentLoaded', () => {
         let isDragging = false;
         let isPinching = false;
         let isRotating = false;
-        let overlayX = 0, overlayY = 0;
-        let overlayWidth = 1000, overlayHeight = 1000;
+        let overlayX = 0,
+          overlayY = 0;
+        let overlayWidth = 1000,
+          overlayHeight = 1000;
         let scale = 1;
         let rotation = 0;
-        let dragOffsetX = 0, dragOffsetY = 0;
+        let dragOffsetX = 0,
+          dragOffsetY = 0;
         let lastTouchDistance = 0;
         let lastAngle = 0;
         let touch1, touch2;
-
+        
         function getCanvasScale() {
           const scaleX = canvas.width / canvas.clientWidth;
           const scaleY = canvas.height / canvas.clientHeight;
           return { scaleX, scaleY };
         }
-
+        
         function getTouchPosition(touch, rect, scaleX, scaleY) {
           return {
             x: (touch.clientX - rect.left) * scaleX,
             y: (touch.clientY - rect.top) * scaleY
           };
         }
-
+        
         function isOverOverlay(x, y) {
           // Simplified hit detection - we'll improve this for rotated elements
-          return x >= overlayX && x <= overlayX + overlayWidth * scale && 
-                 y >= overlayY && y <= overlayY + overlayHeight * scale;
+          return x >= overlayX && x <= overlayX + overlayWidth * scale &&
+            y >= overlayY && y <= overlayY + overlayHeight * scale;
         }
-
+        
         canvas.addEventListener('mousedown', (e) => {
           e.preventDefault();
           const rect = canvas.getBoundingClientRect();
           const { scaleX, scaleY } = getCanvasScale();
           const mouseX = (e.clientX - rect.left) * scaleX;
           const mouseY = (e.clientY - rect.top) * scaleY;
-
+          
           if (isOverOverlay(mouseX, mouseY)) {
             isDragging = true;
             dragOffsetX = mouseX - overlayX;
             dragOffsetY = mouseY - overlayY;
           }
         });
-
+        
         document.addEventListener('mousemove', (e) => {
           if (isDragging) {
             e.preventDefault();
@@ -161,11 +164,11 @@ document.addEventListener('DOMContentLoaded', () => {
             drawCanvas();
           }
         });
-
+        
         document.addEventListener('mouseup', () => {
           isDragging = false;
         });
-
+        
         canvas.addEventListener('touchstart', (e) => {
           e.preventDefault();
           const rect = canvas.getBoundingClientRect();
@@ -192,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lastAngle = Math.atan2(dy, dx) * 180 / Math.PI;
           }
         });
-
+        
         canvas.addEventListener('touchmove', (e) => {
           e.preventDefault();
           const rect = canvas.getBoundingClientRect();
@@ -231,14 +234,14 @@ document.addEventListener('DOMContentLoaded', () => {
             drawCanvas();
           }
         });
-
+        
         canvas.addEventListener('touchend', () => {
           isDragging = false;
           isPinching = false;
           isRotating = false;
         });
-
-        window.drawCanvas = function () {
+        
+        window.drawCanvas = function() {
           if (!selectedNFT) {
             console.log('No NFT selected for canvas');
             return;
@@ -288,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           };
         };
-
+        
         // Apply overlay
         const applyButton = document.getElementById('apply-overlay');
         if (applyButton) {
@@ -308,10 +311,137 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Wallet init error:', error);
     }
   }
-
+  
   // Rest of your existing functions (handleNewSession, disconnectWallet, fetchNFTs, selectNFT)
   // ... [Keep all these functions exactly as they are in your original code]
-
+  // Handle new session
+  function handleNewSession(session) {
+    console.log('Handling new session');
+    const account = session.namespaces?.hedera?.accounts?.[0];
+    if (!account) {
+      console.error('No account found');
+      return;
+    }
+    
+    const accountId = account.split(':').pop();
+    localStorage.setItem('hederaAccountId', accountId);
+    const walletStatus = document.getElementById('wallet-status');
+    if (walletStatus) {
+      walletStatus.textContent = `Connected: ${accountId}`;
+    } else {
+      console.error('wallet-status element not found');
+    }
+    const connectButton = document.getElementById('connect-wallet');
+    const disconnectButton = document.getElementById('disconnect-wallet');
+    if (connectButton) connectButton.style.display = 'none';
+    if (disconnectButton) disconnectButton.style.display = 'block';
+    
+    fetchNFTs(accountId);
+  }
+  
+  // Disconnect
+  async function disconnectWallet() {
+    console.log('Disconnecting wallet');
+    try {
+      if (dAppConnector) {
+        await dAppConnector.disconnect();
+        dAppConnector = null;
+        const walletStatus = document.getElementById('wallet-status');
+        if (walletStatus) walletStatus.textContent = 'Wallet not connected';
+        const connectButton = document.getElementById('connect-wallet');
+        const disconnectButton = document.getElementById('disconnect-wallet');
+        if (connectButton) connectButton.style.display = 'block';
+        if (disconnectButton) disconnectButton.style.display = 'none';
+        const nftList = document.getElementById('nft-list');
+        if (nftList) nftList.innerHTML = '<p class="nft-placeholder">Connect wallet to see NFTs</p>';
+      }
+    } catch (error) {
+      console.error('Disconnect error:', error);
+    }
+  }
+  
+  // Fetch NFTs using Mirror Node REST API
+  async function fetchNFTs(accountId) {
+    console.log('Fetching NFTs for account:', accountId);
+    try {
+      const response = await fetch(`https://mainnet.mirrornode.hedera.com/api/v1/accounts/${accountId}/nfts`);
+      const data = await response.json();
+      const nfts = data.nfts || [];
+      const nftList = document.getElementById('nft-list');
+      if (nftList) {
+        nftList.innerHTML = await Promise.all(nfts.map(async nft => {
+          let imageUrl = 'https://via.placeholder.com/150';
+          if (nft.metadata) {
+            // Decode the base64 metadata
+            const metadataStr = atob(nft.metadata);
+            console.log(`Decoded metadata for NFT ${nft.serial_number}:`, metadataStr);
+            // Check if metadataStr is an IPFS URL
+            if (metadataStr.startsWith('ipfs://')) {
+              const ipfsHash = metadataStr.replace('ipfs://', '');
+              const metadataUrl = `https://ipfs.io/ipfs/${ipfsHash}`;
+              console.log(`Fetching metadata from: ${metadataUrl}`);
+              try {
+                // Fetch the metadata JSON from the IPFS URL
+                const metadataResponse = await fetch(metadataUrl);
+                const metadata = await metadataResponse.json();
+                console.log(`Metadata for NFT ${nft.serial_number}:`, metadata);
+                if (metadata.image) {
+                  // Handle the image URL from the metadata
+                  if (metadata.image.startsWith('ipfs://')) {
+                    const imageHash = metadata.image.replace('ipfs://', '');
+                    imageUrl = `https://ipfs.io/ipfs/${imageHash}`;
+                  } else {
+                    imageUrl = metadata.image;
+                  }
+                  console.log(`Final image URL for NFT ${nft.serial_number}:`, imageUrl);
+                }
+              } catch (e) {
+                console.error(`Error fetching metadata from IPFS for NFT ${nft.serial_number}:`, e);
+              }
+            } else {
+              // If metadataStr isn't an IPFS URL, try parsing it as JSON
+              try {
+                const metadata = JSON.parse(metadataStr);
+                console.log(`Metadata for NFT ${nft.serial_number}:`, metadata);
+                if (metadata.image) {
+                  if (metadata.image.startsWith('ipfs://')) {
+                    const imageHash = metadata.image.replace('ipfs://', '');
+                    imageUrl = `https://ipfs.io/ipfs/${imageHash}`;
+                  } else {
+                    imageUrl = metadata.image;
+                  }
+                  console.log(`Final image URL for NFT ${nft.serial_number}:`, imageUrl);
+                }
+              } catch (e) {
+                console.error(`Metadata parse error for NFT ${nft.serial_number}:`, e);
+              }
+            }
+          }
+          return `
+            <div class="nft-item" data-serial="${nft.serial_number}">
+              <img src="${imageUrl}" alt="NFT" onclick="selectNFT(this)">
+              <p>Serial: ${nft.serial_number}</p>
+            </div>
+          `;
+        })).then(results => results.join(''));
+      }
+    } catch (error) {
+      console.error('NFT fetch error:', error);
+      const nftList = document.getElementById('nft-list');
+      if (nftList) nftList.innerHTML = '<p class="nft-placeholder">Error fetching NFTs</p>';
+    }
+  }
+  
+  // Select NFT for overlay
+  let selectedNFT = null;
+  window.selectNFT = function(img) {
+    selectedNFT = img.src;
+    document.querySelectorAll('.nft-item').forEach(item => item.classList.remove('selected'));
+    img.parentElement.classList.add('selected');
+    const canvasPlaceholder = document.getElementById('nft-display')?.querySelector('.canvas-placeholder');
+    if (canvasPlaceholder) canvasPlaceholder.style.display = 'none';
+    drawCanvas();
+  };
   // Start WalletConnect initialization
   initializeWalletConnect();
 });
