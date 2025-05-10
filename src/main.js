@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
       
-      // Canvas setup with enhanced touch controls
+      // Enhanced Canvas setup with desktop rotation and resizing
       console.log('Setting up canvas listeners');
       const canvas = document.getElementById('nft-canvas');
       if (canvas) {
@@ -106,69 +106,197 @@ document.addEventListener('DOMContentLoaded', () => {
         let isDragging = false;
         let isPinching = false;
         let isRotating = false;
-        let overlayX = 0,
-          overlayY = 0;
-        let overlayWidth = 1000,
-          overlayHeight = 1000;
+        let isRotatingWithKey = false;
+        let isResizingWithKey = false;
+        let overlayX = 100, overlayY = 100;
+        let overlayWidth = 1000, overlayHeight = 1000;
         let scale = 1;
         let rotation = 0;
-        let dragOffsetX = 0,
-          dragOffsetY = 0;
+        let dragOffsetX = 0, dragOffsetY = 0;
         let lastTouchDistance = 0;
         let lastAngle = 0;
         let touch1, touch2;
-        
+        let rotateStartX = 0, rotateStartY = 0;
+        let resizeStartX = 0, resizeStartY = 0;
+        let initialWidth = 0, initialHeight = 0;
+
         function getCanvasScale() {
-          const scaleX = canvas.width / canvas.clientWidth;
-          const scaleY = canvas.height / canvas.clientHeight;
-          return { scaleX, scaleY };
+          return {
+            scaleX: canvas.width / canvas.clientWidth,
+            scaleY: canvas.height / canvas.clientHeight
+          };
         }
-        
+
         function getTouchPosition(touch, rect, scaleX, scaleY) {
           return {
             x: (touch.clientX - rect.left) * scaleX,
             y: (touch.clientY - rect.top) * scaleY
           };
         }
-        
+
         function isOverOverlay(x, y) {
-          // Simplified hit detection - we'll improve this for rotated elements
-          return x >= overlayX && x <= overlayX + overlayWidth * scale &&
-            y >= overlayY && y <= overlayY + overlayHeight * scale;
+          // Improved hit detection for rotated elements
+          const halfWidth = (overlayWidth * scale) / 2;
+          const halfHeight = (overlayHeight * scale) / 2;
+          const centerX = overlayX + halfWidth;
+          const centerY = overlayY + halfHeight;
+          
+          // Transform point to overlay's local coordinates
+          const dx = x - centerX;
+          const dy = y - centerY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) - (rotation * Math.PI / 180);
+          
+          // Check if point is within bounds
+          const localX = distance * Math.cos(angle);
+          const localY = distance * Math.sin(angle);
+          
+          return Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
         }
-        
+
+        function isOverResizeHandle(x, y) {
+          // Check if cursor is near the bottom-right corner (for resize)
+          const halfWidth = (overlayWidth * scale) / 2;
+          const halfHeight = (overlayHeight * scale) / 2;
+          const centerX = overlayX + halfWidth;
+          const centerY = overlayY + halfHeight;
+          
+          // Transform point to overlay's local coordinates
+          const dx = x - centerX;
+          const dy = y - centerY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) - (rotation * Math.PI / 180);
+          
+          // Check if point is near the corner
+          const localX = distance * Math.cos(angle);
+          const localY = distance * Math.sin(angle);
+          
+          const handleSize = 30;
+          return localX > halfWidth - handleSize && localY > halfHeight - handleSize;
+        }
+
+        function isOverRotateHandle(x, y) {
+          // Check if cursor is near the top-center (for rotation)
+          const halfWidth = (overlayWidth * scale) / 2;
+          const halfHeight = (overlayHeight * scale) / 2;
+          const centerX = overlayX + halfWidth;
+          const centerY = overlayY + halfHeight;
+          
+          // Transform point to overlay's local coordinates
+          const dx = x - centerX;
+          const dy = y - centerY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) - (rotation * Math.PI / 180);
+          
+          // Check if point is near the top center
+          const localX = distance * Math.cos(angle);
+          const localY = distance * Math.sin(angle);
+          
+          const handleSize = 30;
+          return Math.abs(localX) < handleSize && localY < -halfHeight + handleSize;
+        }
+
+        // Mouse events for desktop
         canvas.addEventListener('mousedown', (e) => {
           e.preventDefault();
           const rect = canvas.getBoundingClientRect();
           const { scaleX, scaleY } = getCanvasScale();
           const mouseX = (e.clientX - rect.left) * scaleX;
           const mouseY = (e.clientY - rect.top) * scaleY;
-          
-          if (isOverOverlay(mouseX, mouseY)) {
+
+          if (isOverRotateHandle(mouseX, mouseY) && e.shiftKey) {
+            // Start rotation
+            isRotatingWithKey = true;
+            rotateStartX = mouseX;
+            rotateStartY = mouseY;
+            canvas.style.cursor = 'grab';
+          } else if (isOverResizeHandle(mouseX, mouseY) && e.ctrlKey) {
+            // Start resizing
+            isResizingWithKey = true;
+            resizeStartX = mouseX;
+            resizeStartY = mouseY;
+            initialWidth = overlayWidth * scale;
+            initialHeight = overlayHeight * scale;
+            canvas.style.cursor = 'nwse-resize';
+          } else if (isOverOverlay(mouseX, mouseY)) {
+            // Start dragging
             isDragging = true;
             dragOffsetX = mouseX - overlayX;
             dragOffsetY = mouseY - overlayY;
+            canvas.style.cursor = 'move';
           }
         });
-        
+
         document.addEventListener('mousemove', (e) => {
+          const rect = canvas.getBoundingClientRect();
+          const { scaleX, scaleY } = getCanvasScale();
+          const mouseX = (e.clientX - rect.left) * scaleX;
+          const mouseY = (e.clientY - rect.top) * scaleY;
+
+          // Update cursor style
+          if (isOverRotateHandle(mouseX, mouseY) && e.shiftKey) {
+            canvas.style.cursor = 'grab';
+          } else if (isOverResizeHandle(mouseX, mouseY) && e.ctrlKey) {
+            canvas.style.cursor = 'nwse-resize';
+          } else if (isOverOverlay(mouseX, mouseY)) {
+            canvas.style.cursor = 'move';
+          } else {
+            canvas.style.cursor = 'default';
+          }
+
           if (isDragging) {
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const { scaleX, scaleY } = getCanvasScale();
-            const mouseX = (e.clientX - rect.left) * scaleX;
-            const mouseY = (e.clientY - rect.top) * scaleY;
-            
             overlayX = mouseX - dragOffsetX;
             overlayY = mouseY - dragOffsetY;
             drawCanvas();
+          } else if (isRotatingWithKey) {
+            e.preventDefault();
+            // Calculate rotation based on mouse movement
+            const centerX = overlayX + (overlayWidth * scale) / 2;
+            const centerY = overlayY + (overlayHeight * scale) / 2;
+            
+            const angle1 = Math.atan2(rotateStartY - centerY, rotateStartX - centerX);
+            const angle2 = Math.atan2(mouseY - centerY, mouseX - centerX);
+            rotation += (angle2 - angle1) * (180 / Math.PI);
+            
+            rotateStartX = mouseX;
+            rotateStartY = mouseY;
+            drawCanvas();
+          } else if (isResizingWithKey) {
+            e.preventDefault();
+            // Calculate scale based on mouse movement
+            const dx = mouseX - resizeStartX;
+            const dy = mouseY - resizeStartY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Adjust scale based on movement
+            const scaleFactor = 1 + (distance / 100);
+            scale = Math.max(0.1, Math.min(scale * scaleFactor, 5));
+            
+            resizeStartX = mouseX;
+            resizeStartY = mouseY;
+            drawCanvas();
           }
         });
-        
+
         document.addEventListener('mouseup', () => {
           isDragging = false;
+          isRotatingWithKey = false;
+          isResizingWithKey = false;
+          canvas.style.cursor = 'default';
         });
-        
+
+        // Keyboard shortcuts for rotation and scaling
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'r' || e.key === 'R') {
+            // Reset transformations
+            scale = 1;
+            rotation = 0;
+            drawCanvas();
+          }
+        });
+
+        // Touch events (remain unchanged from your original implementation)
         canvas.addEventListener('touchstart', (e) => {
           e.preventDefault();
           const rect = canvas.getBoundingClientRect();
@@ -195,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lastAngle = Math.atan2(dy, dx) * 180 / Math.PI;
           }
         });
-        
+
         canvas.addEventListener('touchmove', (e) => {
           e.preventDefault();
           const rect = canvas.getBoundingClientRect();
@@ -234,13 +362,13 @@ document.addEventListener('DOMContentLoaded', () => {
             drawCanvas();
           }
         });
-        
+
         canvas.addEventListener('touchend', () => {
           isDragging = false;
           isPinching = false;
           isRotating = false;
         });
-        
+
         window.drawCanvas = function() {
           if (!selectedNFT) {
             console.log('No NFT selected for canvas');
@@ -284,6 +412,29 @@ document.addEventListener('DOMContentLoaded', () => {
                   overlayWidth * scale,
                   overlayHeight * scale
                 );
+                
+                // Draw resize and rotate handles (only when overlay is selected)
+                if (selectedNFT) {
+                  ctx.fillStyle = '#00ff40';
+                  
+                  // Resize handle (bottom-right corner)
+                  ctx.beginPath();
+                  ctx.arc(
+                    (overlayWidth * scale) / 2 - 10,
+                    (overlayHeight * scale) / 2 - 10,
+                    8, 0, Math.PI * 2
+                  );
+                  ctx.fill();
+                  
+                  // Rotate handle (top-center)
+                  ctx.beginPath();
+                  ctx.arc(
+                    0,
+                    -(overlayHeight * scale) / 2 + 10,
+                    8, 0, Math.PI * 2
+                  );
+                  ctx.fill();
+                }
                 
                 // Restore the context
                 ctx.restore();
@@ -440,6 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (canvasPlaceholder) canvasPlaceholder.style.display = 'none';
     drawCanvas();
   };
+  
   // Start WalletConnect initialization
   initializeWalletConnect();
 });
