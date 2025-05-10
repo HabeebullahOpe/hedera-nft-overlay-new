@@ -2,11 +2,42 @@ import { DAppConnector } from '@hashgraph/hedera-wallet-connect';
 import { LedgerId } from '@hashgraph/sdk';
 
 let dAppConnector;
+let stage;
+let nftLayer;
+let overlayLayer;
+let overlayImage;
+let selectedNFTImage = null;
+let selectedNFT = null;
 
-// Wait for DOM to load
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM fully loaded');
-  
+  // Initialize Konva Stage
+  function initKonva() {
+    const container = document.getElementById('nft-display');
+    const placeholder = container.querySelector('.canvas-placeholder');
+    
+    stage = new Konva.Stage({
+      container: 'nft-display',
+      width: container.clientWidth,
+      height: container.clientHeight
+    });
+
+    // Create layers
+    nftLayer = new Konva.Layer();
+    overlayLayer = new Konva.Layer();
+    stage.add(nftLayer);
+    stage.add(overlayLayer);
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      stage.width(container.clientWidth);
+      stage.height(container.clientHeight);
+      stage.batchDraw();
+    });
+
+    // Hide placeholder when canvas is initialized
+    if (placeholder) placeholder.style.display = 'none';
+  }
+
   // Initialize WalletConnect
   async function initializeWalletConnect() {
     console.log('Starting WalletConnect initialization');
@@ -59,410 +90,11 @@ document.addEventListener('DOMContentLoaded', () => {
         disconnectButton.addEventListener('click', disconnectWallet);
       }
       
-      // Overlay upload
-      console.log('Setting up overlay-upload listener');
-      const overlayUpload = document.getElementById('overlay-upload');
-      if (overlayUpload) {
-        overlayUpload.addEventListener('change', (event) => {
-          const file = event.target.files[0];
-          if (file) {
-            const overlayImg = document.getElementById('overlay-img');
-            overlayImg.src = URL.createObjectURL(file);
-            drawCanvas();
-          }
-        });
-      }
-      
-      // Preset overlays
-      console.log('Setting up overlay buttons');
-      ['overlay1', 'overlay2', 'overlay3', 'overlay4', 'overlay5', 'overlay6', 'overlay7'].forEach((id, index) => {
-        const button = document.getElementById(id);
-        if (button) {
-          button.addEventListener('click', () => {
-            const overlayImg = document.getElementById('overlay-img');
-            const overlays = [
-              '/assets/arts/Good_Morning._Overlay.png',
-              '/assets/arts/Mic.Overlay.png',
-              '/assets/arts/Boombox.Overlay.png',
-              '/assets/arts/Bonjour.Overlay.png',
-              '/assets/arts/Sign.Overlay.png',
-              '/assets/arts/Goodnight.Overlay.png',
-              ''
-            ];
-            if (index < 6) {
-              overlayImg.src = overlays[index];
-              console.log(`Overlay button ${id} clicked, setting overlay to ${overlays[index]}`);
-              drawCanvas();
-            }
-          });
-        }
-      });
-      
-      // Enhanced Canvas setup with desktop rotation and resizing
-      console.log('Setting up canvas listeners');
-      const canvas = document.getElementById('nft-canvas');
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        let isDragging = false;
-        let isPinching = false;
-        let isRotating = false;
-        let isRotatingWithKey = false;
-        let isResizingWithKey = false;
-        let overlayX = 100, overlayY = 100;
-        let overlayWidth = 1000, overlayHeight = 1000;
-        let scale = 1;
-        let rotation = 0;
-        let dragOffsetX = 0, dragOffsetY = 0;
-        let lastTouchDistance = 0;
-        let lastAngle = 0;
-        let touch1, touch2;
-        let rotateStartX = 0, rotateStartY = 0;
-        let resizeStartX = 0, resizeStartY = 0;
-        let initialWidth = 0, initialHeight = 0;
-
-        function getCanvasScale() {
-          return {
-            scaleX: canvas.width / canvas.clientWidth,
-            scaleY: canvas.height / canvas.clientHeight
-          };
-        }
-
-        function getTouchPosition(touch, rect, scaleX, scaleY) {
-          return {
-            x: (touch.clientX - rect.left) * scaleX,
-            y: (touch.clientY - rect.top) * scaleY
-          };
-        }
-
-        function isOverOverlay(x, y) {
-          // Improved hit detection for rotated elements
-          const halfWidth = (overlayWidth * scale) / 2;
-          const halfHeight = (overlayHeight * scale) / 2;
-          const centerX = overlayX + halfWidth;
-          const centerY = overlayY + halfHeight;
-          
-          // Transform point to overlay's local coordinates
-          const dx = x - centerX;
-          const dy = y - centerY;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          const angle = Math.atan2(dy, dx) - (rotation * Math.PI / 180);
-          
-          // Check if point is within bounds
-          const localX = distance * Math.cos(angle);
-          const localY = distance * Math.sin(angle);
-          
-          return Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
-        }
-
-        function isOverResizeHandle(x, y) {
-          // Check if cursor is near the bottom-right corner (for resize)
-          const halfWidth = (overlayWidth * scale) / 2;
-          const halfHeight = (overlayHeight * scale) / 2;
-          const centerX = overlayX + halfWidth;
-          const centerY = overlayY + halfHeight;
-          
-          // Transform point to overlay's local coordinates
-          const dx = x - centerX;
-          const dy = y - centerY;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          const angle = Math.atan2(dy, dx) - (rotation * Math.PI / 180);
-          
-          // Check if point is near the corner
-          const localX = distance * Math.cos(angle);
-          const localY = distance * Math.sin(angle);
-          
-          const handleSize = 30;
-          return localX > halfWidth - handleSize && localY > halfHeight - handleSize;
-        }
-
-        function isOverRotateHandle(x, y) {
-          // Check if cursor is near the top-center (for rotation)
-          const halfWidth = (overlayWidth * scale) / 2;
-          const halfHeight = (overlayHeight * scale) / 2;
-          const centerX = overlayX + halfWidth;
-          const centerY = overlayY + halfHeight;
-          
-          // Transform point to overlay's local coordinates
-          const dx = x - centerX;
-          const dy = y - centerY;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          const angle = Math.atan2(dy, dx) - (rotation * Math.PI / 180);
-          
-          // Check if point is near the top center
-          const localX = distance * Math.cos(angle);
-          const localY = distance * Math.sin(angle);
-          
-          const handleSize = 30;
-          return Math.abs(localX) < handleSize && localY < -halfHeight + handleSize;
-        }
-
-        // Mouse events for desktop
-        canvas.addEventListener('mousedown', (e) => {
-          e.preventDefault();
-          const rect = canvas.getBoundingClientRect();
-          const { scaleX, scaleY } = getCanvasScale();
-          const mouseX = (e.clientX - rect.left) * scaleX;
-          const mouseY = (e.clientY - rect.top) * scaleY;
-
-          if (isOverRotateHandle(mouseX, mouseY) && e.shiftKey) {
-            // Start rotation
-            isRotatingWithKey = true;
-            rotateStartX = mouseX;
-            rotateStartY = mouseY;
-            canvas.style.cursor = 'grab';
-          } else if (isOverResizeHandle(mouseX, mouseY) && e.ctrlKey) {
-            // Start resizing
-            isResizingWithKey = true;
-            resizeStartX = mouseX;
-            resizeStartY = mouseY;
-            initialWidth = overlayWidth * scale;
-            initialHeight = overlayHeight * scale;
-            canvas.style.cursor = 'nwse-resize';
-          } else if (isOverOverlay(mouseX, mouseY)) {
-            // Start dragging
-            isDragging = true;
-            dragOffsetX = mouseX - overlayX;
-            dragOffsetY = mouseY - overlayY;
-            canvas.style.cursor = 'move';
-          }
-        });
-
-        document.addEventListener('mousemove', (e) => {
-          const rect = canvas.getBoundingClientRect();
-          const { scaleX, scaleY } = getCanvasScale();
-          const mouseX = (e.clientX - rect.left) * scaleX;
-          const mouseY = (e.clientY - rect.top) * scaleY;
-
-          // Update cursor style
-          if (isOverRotateHandle(mouseX, mouseY) && e.shiftKey) {
-            canvas.style.cursor = 'grab';
-          } else if (isOverResizeHandle(mouseX, mouseY) && e.ctrlKey) {
-            canvas.style.cursor = 'nwse-resize';
-          } else if (isOverOverlay(mouseX, mouseY)) {
-            canvas.style.cursor = 'move';
-          } else {
-            canvas.style.cursor = 'default';
-          }
-
-          if (isDragging) {
-            e.preventDefault();
-            overlayX = mouseX - dragOffsetX;
-            overlayY = mouseY - dragOffsetY;
-            drawCanvas();
-          } else if (isRotatingWithKey) {
-            e.preventDefault();
-            // Calculate rotation based on mouse movement
-            const centerX = overlayX + (overlayWidth * scale) / 2;
-            const centerY = overlayY + (overlayHeight * scale) / 2;
-            
-            const angle1 = Math.atan2(rotateStartY - centerY, rotateStartX - centerX);
-            const angle2 = Math.atan2(mouseY - centerY, mouseX - centerX);
-            rotation += (angle2 - angle1) * (180 / Math.PI);
-            
-            rotateStartX = mouseX;
-            rotateStartY = mouseY;
-            drawCanvas();
-          } else if (isResizingWithKey) {
-            e.preventDefault();
-            // Calculate scale based on mouse movement
-            const dx = mouseX - resizeStartX;
-            const dy = mouseY - resizeStartY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            // Adjust scale based on movement
-            const scaleFactor = 1 + (distance / 100);
-            scale = Math.max(0.1, Math.min(scale * scaleFactor, 5));
-            
-            resizeStartX = mouseX;
-            resizeStartY = mouseY;
-            drawCanvas();
-          }
-        });
-
-        document.addEventListener('mouseup', () => {
-          isDragging = false;
-          isRotatingWithKey = false;
-          isResizingWithKey = false;
-          canvas.style.cursor = 'default';
-        });
-
-        // Keyboard shortcuts for rotation and scaling
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'r' || e.key === 'R') {
-            // Reset transformations
-            scale = 1;
-            rotation = 0;
-            drawCanvas();
-          }
-        });
-
-        // Touch events (remain unchanged from your original implementation)
-        canvas.addEventListener('touchstart', (e) => {
-          e.preventDefault();
-          const rect = canvas.getBoundingClientRect();
-          const { scaleX, scaleY } = getCanvasScale();
-          const touches = e.touches;
-          
-          if (touches.length === 1) {
-            const touchPos = getTouchPosition(touches[0], rect, scaleX, scaleY);
-            if (isOverOverlay(touchPos.x, touchPos.y)) {
-              isDragging = true;
-              dragOffsetX = touchPos.x - overlayX;
-              dragOffsetY = touchPos.y - overlayY;
-            }
-          } else if (touches.length === 2) {
-            isPinching = true;
-            isRotating = true;
-            touch1 = touches[0];
-            touch2 = touches[1];
-            
-            // Calculate initial distance and angle
-            const dx = touch1.clientX - touch2.clientX;
-            const dy = touch1.clientY - touch2.clientY;
-            lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
-            lastAngle = Math.atan2(dy, dx) * 180 / Math.PI;
-          }
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-          e.preventDefault();
-          const rect = canvas.getBoundingClientRect();
-          const { scaleX, scaleY } = getCanvasScale();
-          const touches = e.touches;
-          
-          if (isDragging && touches.length === 1) {
-            const touchPos = getTouchPosition(touches[0], rect, scaleX, scaleY);
-            overlayX = touchPos.x - dragOffsetX;
-            overlayY = touchPos.y - dragOffsetY;
-            drawCanvas();
-          } else if (isPinching && touches.length === 2) {
-            touch1 = touches[0];
-            touch2 = touches[1];
-            
-            // Calculate current distance and angle
-            const dx = touch1.clientX - touch2.clientX;
-            const dy = touch1.clientY - touch2.clientY;
-            const currentDistance = Math.sqrt(dx * dx + dy * dy);
-            const currentAngle = Math.atan2(dy, dx) * 180 / Math.PI;
-            
-            // Scale
-            if (lastTouchDistance > 0) {
-              const scaleFactor = currentDistance / lastTouchDistance;
-              scale = Math.max(0.1, Math.min(scale * scaleFactor, 5));
-              lastTouchDistance = currentDistance;
-            }
-            
-            // Rotation
-            if (isRotating) {
-              const angleDiff = currentAngle - lastAngle;
-              rotation += angleDiff;
-              lastAngle = currentAngle;
-            }
-            
-            drawCanvas();
-          }
-        });
-
-        canvas.addEventListener('touchend', () => {
-          isDragging = false;
-          isPinching = false;
-          isRotating = false;
-        });
-
-        window.drawCanvas = function() {
-          if (!selectedNFT) {
-            console.log('No NFT selected for canvas');
-            return;
-          }
-          
-          const nftImg = new Image();
-          const overlayImg = document.getElementById('overlay-img');
-          nftImg.src = selectedNFT;
-          nftImg.crossOrigin = 'Anonymous';
-          
-          nftImg.onload = () => {
-            canvas.width = nftImg.width;
-            canvas.height = nftImg.height;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw NFT
-            ctx.drawImage(nftImg, 0, 0);
-            
-            // Draw overlay with transformations
-            if (overlayImg.src && overlayImg.src !== window.location.href) {
-              const overlay = new Image();
-              overlay.crossOrigin = 'Anonymous';
-              overlay.src = overlayImg.src;
-              
-              overlay.onload = () => {
-                // Save the current context
-                ctx.save();
-                
-                // Move to the center of the overlay
-                ctx.translate(overlayX + (overlayWidth * scale) / 2, overlayY + (overlayHeight * scale) / 2);
-                
-                // Apply rotation
-                ctx.rotate(rotation * Math.PI / 180);
-                
-                // Draw the overlay
-                ctx.drawImage(
-                  overlay,
-                  -(overlayWidth * scale) / 2,
-                  -(overlayHeight * scale) / 2,
-                  overlayWidth * scale,
-                  overlayHeight * scale
-                );
-                
-                // Draw resize and rotate handles (only when overlay is selected)
-                if (selectedNFT) {
-                  ctx.fillStyle = '#00ff40';
-                  
-                  // Resize handle (bottom-right corner)
-                  ctx.beginPath();
-                  ctx.arc(
-                    (overlayWidth * scale) / 2 - 10,
-                    (overlayHeight * scale) / 2 - 10,
-                    8, 0, Math.PI * 2
-                  );
-                  ctx.fill();
-                  
-                  // Rotate handle (top-center)
-                  ctx.beginPath();
-                  ctx.arc(
-                    0,
-                    -(overlayHeight * scale) / 2 + 10,
-                    8, 0, Math.PI * 2
-                  );
-                  ctx.fill();
-                }
-                
-                // Restore the context
-                ctx.restore();
-              };
-            }
-          };
-        };
-        
-        // Apply overlay
-        const applyButton = document.getElementById('apply-overlay');
-        if (applyButton) {
-          applyButton.addEventListener('click', () => {
-            if (selectedNFT) {
-              const link = document.createElement('a');
-              link.href = canvas.toDataURL();
-              link.download = 'overlayed-nft.png';
-              link.click();
-            } else {
-              alert('Select an NFT first!');
-            }
-          });
-        }
-      }
     } catch (error) {
       console.error('Wallet init error:', error);
     }
   }
-  
+
   // Handle new session
   function handleNewSession(session) {
     console.log('Handling new session');
@@ -580,18 +212,159 @@ document.addEventListener('DOMContentLoaded', () => {
       if (nftList) nftList.innerHTML = '<p class="nft-placeholder">Error fetching NFTs</p>';
     }
   }
-  
+
   // Select NFT for overlay
-  let selectedNFT = null;
   window.selectNFT = function(img) {
     selectedNFT = img.src;
+    selectedNFTImage = img;
+    const container = document.getElementById('nft-display');
+    const placeholder = container.querySelector('.canvas-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+
+    // Clear previous NFT image
+    nftLayer.destroyChildren();
+
+    // Load new NFT image
+    const imageObj = new Image();
+    imageObj.crossOrigin = 'Anonymous';
+    imageObj.onload = function() {
+      // Set stage size to match NFT image
+      stage.width(imageObj.width);
+      stage.height(imageObj.height);
+      
+      const nftImg = new Konva.Image({
+        image: imageObj,
+        width: imageObj.width,
+        height: imageObj.height
+      });
+      
+      nftLayer.add(nftImg);
+      stage.batchDraw();
+    };
+    imageObj.src = img.src;
     document.querySelectorAll('.nft-item').forEach(item => item.classList.remove('selected'));
     img.parentElement.classList.add('selected');
-    const canvasPlaceholder = document.getElementById('nft-display')?.querySelector('.canvas-placeholder');
-    if (canvasPlaceholder) canvasPlaceholder.style.display = 'none';
-    drawCanvas();
   };
-  
-  // Start WalletConnect initialization
+
+  // Handle overlay selection/upload
+  function setupOverlayControls() {
+    // Preset overlays
+    ['overlay1', 'overlay2', 'overlay3', 'overlay4', 'overlay5', 'overlay6', 'overlay7'].forEach((id, index) => {
+      const button = document.getElementById(id);
+      if (button) {
+        button.addEventListener('click', () => {
+          const overlays = [
+            '/assets/arts/Good_Morning._Overlay.png',
+            '/assets/arts/Mic.Overlay.png',
+            '/assets/arts/Boombox.Overlay.png',
+            '/assets/arts/Bonjour.Overlay.png',
+            '/assets/arts/Sign.Overlay.png',
+            '/assets/arts/Goodnight.Overlay.png',
+            '/assets/arts/Coffee.Overlay.png'
+          ];
+          
+          if (index < 7) {
+            loadOverlayImage(overlays[index]);
+          }
+        });
+      }
+    });
+
+    // Overlay upload
+    const overlayUpload = document.getElementById('overlay-upload');
+    if (overlayUpload) {
+      overlayUpload.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+          const url = URL.createObjectURL(file);
+          loadOverlayImage(url);
+        }
+      });
+    }
+  }
+
+  // Load overlay image with transform controls
+  function loadOverlayImage(src) {
+    // Remove previous overlay if exists
+    if (overlayImage) {
+      overlayImage.destroy();
+      overlayLayer.destroyChildren();
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = function() {
+      overlayImage = new Konva.Image({
+        image: img,
+        width: img.width,
+        height: img.height,
+        draggable: true,
+        x: stage.width() / 2 - img.width / 2,
+        y: stage.height() / 2 - img.height / 2
+      });
+
+      // Add transformer for resize/rotate
+      const tr = new Konva.Transformer({
+        node: overlayImage,
+        enabledAnchors: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+        rotateEnabled: true,
+        boundBoxFunc: function(oldBox, newBox) {
+          // Limit minimum size
+          if (newBox.width < 30 || newBox.height < 30) {
+            return oldBox;
+          }
+          return newBox;
+        }
+      });
+
+      overlayLayer.add(overlayImage);
+      overlayLayer.add(tr);
+      stage.batchDraw();
+    };
+    img.src = src;
+  }
+
+  // Apply overlay (download)
+  document.getElementById('apply-overlay').addEventListener('click', () => {
+    if (!selectedNFT) {
+      alert('Select an NFT first!');
+      return;
+    }
+
+    // Create temporary stage for export
+    const exportStage = new Konva.Stage({
+      width: stage.width(),
+      height: stage.height()
+    });
+
+    // Clone layers
+    const exportNftLayer = nftLayer.clone();
+    const exportOverlayLayer = overlayLayer.clone();
+    
+    exportStage.add(exportNftLayer);
+    exportStage.add(exportOverlayLayer);
+
+    // Export as image
+    const dataURL = exportStage.toDataURL({
+      mimeType: 'image/png',
+      quality: 1,
+      pixelRatio: 2 // Higher quality
+    });
+
+    // Download
+    const link = document.createElement('a');
+    link.download = 'overlayed-nft.png';
+    link.href = dataURL;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Clean up
+    exportStage.destroy();
+  });
+
+  // Initialize everything
+  initKonva();
+  setupOverlayControls();
   initializeWalletConnect();
 });
