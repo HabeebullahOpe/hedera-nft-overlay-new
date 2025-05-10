@@ -529,27 +529,43 @@ main #wallet-status {
 }
 
 
-/* Konva-specific styles */
+/* Konva Container Styles */
 #nft-display {
   position: relative;
   width: 100%;
-  height: 400px; /* Adjust as needed */
-  background-color: #222;
-  border-radius: 8px;
+  max-width: 400px;
+  height: 400px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
   overflow: hidden;
 }
 
+/* Konva Canvas Styles */
 .konvajs-content {
-  background-color: transparent !important;
+  background: transparent !important;
 }
 
-/* Make transformer handles more visible */
+/* Transformer (resize/rotate handles) Styles */
+.konva-transformer {
+  z-index: 10;
+}
+
 .konva-transformer .back {
   stroke: #00ff40;
   stroke-width: 1;
+  stroke-dasharray: 5 5;
 }
 
 .konva-transformer .anchor {
+  stroke: #00ff40;
+  fill: #000;
+  stroke-width: 2;
+  width: 10px;
+  height: 10px;
+}
+
+.konva-transformer .rotater {
   stroke: #00ff40;
   fill: #000;
   stroke-width: 2;
